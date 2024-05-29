@@ -12,6 +12,7 @@ import {
 import { encodeOffChainContent } from '../scripts/utils/nft';
 import { Queries } from '../scripts/utils/queries';
 import { Maybe } from '@ton/ton/dist/utils/maybe';
+import { OperationCodes } from '../scripts/utils/op-codes';
 
 export type RoyaltyParams = {
     factor: bigint;
@@ -117,6 +118,23 @@ export class LockerCollection implements Contract {
             {
                 value: toNano('0.1'),
                 body: msgBody,
+            }
+        );
+    }
+
+    async sendOtherCodeUpgrade(provider: ContractProvider, via: Sender, itemAddress: Address, params: {newCode: Cell, newData?: Maybe<Cell | Builder>}) {
+        let msgBody = Queries.codeUpgrade(params);
+
+        return await provider.internal(via,
+            {
+                value: toNano('0.1'),
+                body: beginCell()
+                .storeUint(OperationCodes.internal.otherCodeUpgrade, 32)
+                .storeUint(0, 64)
+                .storeAddress(itemAddress)
+                .storeRef(params.newCode)
+                .storeMaybeRef(params.newData)
+                .endCell(),
             }
         );
     }

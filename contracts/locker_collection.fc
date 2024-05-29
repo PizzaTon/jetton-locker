@@ -113,17 +113,21 @@ slice calculate_nft_item_address(int wc, cell state_init) {
                     begin_cell()
                         .store_slice(jetton_master_address)
                         .store_ref(jetton_wallet_code)
-                        .end_cell()
+                    .end_cell()
                 );
 
             cell nft_state_init = calculate_nft_item_state_init(next_item_index, nft_item_code);
             slice nft_address = calculate_nft_item_address(workchain(), nft_state_init);
-            deploy_nft_item( nft_address, nft_state_init, msg_value / 2, nft_content.end_cell(), 1);
-            transfer_jetton(jetton_master_address, jetton_wallet_code, query_id, nft_address, amount, 0, my_balance / 2, 1);
+            deploy_nft_item(nft_address, nft_state_init, 40000000, nft_content.end_cell(), 1);
+            transfer_jetton(jetton_master_address, jetton_wallet_code, query_id, nft_address, amount, msg_value - 40000000, 0, 1);
 
             next_item_index += 1;
             save_data(owner_address, next_item_index, content, nft_item_code, royalty_params);
         }
+        return ();
+    }
+
+    if(op == op::excesses()) {
         return ();
     }
 

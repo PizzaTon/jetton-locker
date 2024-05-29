@@ -39,6 +39,7 @@ export const OperationCodes = {
         withdrawBalance: 0x5,
         updateSecondOwner: 0x6,
         upgradeContract: 0x7,
+        otherCodeUpgrade: 0xB,
         updateFactors: 0x8,
         excesses: 0xd53276db,
     },

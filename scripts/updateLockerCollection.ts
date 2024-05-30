@@ -15,7 +15,7 @@ export async function run(provider: NetworkProvider) {
     await lockerCollection.sendCodeUpgrade(provider.sender(), {
         newCode: lockerCode,
         newData: lockerCollectionConfigToCell({
-            nextItemIndex: 0n,
+            nextItemIndex: 2n,
             collectionContent: 'https://api.pizzaton.me/v1/locker/collectionmeta',
             commonContent: 'https://api.pizzaton.me/v1/locker/meta/',
             nftItemCode: nftItemCode,

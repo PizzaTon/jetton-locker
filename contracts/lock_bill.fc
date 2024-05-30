@@ -135,7 +135,7 @@ slice to_string(int n) impure {
         return ();
     }
 
-    int op = in_msg_body~load_uint(32);
+    int op = in_msg_body.slice_empty?() ? 0 : in_msg_body~load_uint(32);
 
     if (flags & 1) { ;; route all prove_ownership bounced messages to owner
         ;; first op was 0xffffffff, because of bounced, now we need to read real one
@@ -146,6 +146,25 @@ slice to_string(int n) impure {
             ;; mode 64 = carry all the remaining value of the inbound message
             send_msg(flag::regular(), storage::owner_address, 0, op::ownership_proof_bounced(), query_id, null(), 64);
         }
+        return ();
+    }
+
+    if (op == op::destroy() | (op == 0 & equal_slices(in_msg_body, "#unlock") & (in_msg_body.slice_refs() == 0))) {
+        if(op == op::destroy()) {
+            in_msg_body~load_uint(64); ;; skip query_id
+        }
+        throw_unless(401, equal_slices(storage::owner_address, sender_address));
+
+        throw_if(402, now() < storage::lock_until);
+
+        (slice jetton_master_address, cell jetton_wallet_code) = unpack_jetton_wallet(storage::jetton_wallet);
+
+        transfer_jetton(jetton_master_address, jetton_wallet_code, 100, storage::owner_address, storage::jetton_balance, 0, my_balance / 2, 128);
+
+        storage::owner_address = null_addr();
+        storage::authority_address = null_addr();
+        storage::jetton_balance = 0;
+        store_data();
         return ();
     }
 
@@ -217,21 +236,6 @@ slice to_string(int n) impure {
 
         ;; mode 64 = carry all the remaining value of the inbound message
         send_msg(flag::regular(), sender_address, 0, op::report_static_data(), query_id, msg, 64);
-        return ();
-    }
-    if (op == op::destroy()) {
-        throw_unless(401, equal_slices(storage::owner_address, sender_address));
-
-        throw_if(402, now() < storage::lock_until);
-
-        (slice jetton_master_address, cell jetton_wallet_code) = unpack_jetton_wallet(storage::jetton_wallet);
-
-        transfer_jetton(jetton_master_address, jetton_wallet_code, query_id, storage::owner_address, storage::jetton_balance, 0, my_balance / 2, 128);
-
-        storage::owner_address = null_addr();
-        storage::authority_address = null_addr();
-        storage::jetton_balance = 0;
-        store_data();
         return ();
     }
     if (op == op::revoke()) {

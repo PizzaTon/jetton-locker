@@ -105,10 +105,6 @@ slice to_string(int n) impure {
 }
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
-    if (in_msg_body.slice_empty?()) { ;; ignore empty messages
-        return ();
-    }
-
     slice cs = in_msg_full.begin_parse();
     int flags = cs~load_uint(4);
 
@@ -117,25 +113,30 @@ slice to_string(int n) impure {
     load_data();
 
     if (~ init?) {
+        if (in_msg_body.slice_empty?()) { ;; ignore empty messages
+            return ();
+        }
+
         throw_unless(405, equal_slices(storage::collection_address, sender_address));
 
         storage::owner_address     = in_msg_body~load_msg_addr();
         storage::authority_address = in_msg_body~load_msg_addr();
         storage::revoked_at        = 0;
         storage::lock_until        = in_msg_body~load_uint(64);
+        throw_unless(406, storage::lock_until > now());
         storage::jetton_balance    = in_msg_body~load_coins();
+        throw_unless(407, storage::jetton_balance > 0);
         storage::jetton_wallet     = in_msg_body~load_ref();
         storage::content           = begin_cell()
                                             .store_slice(to_string(storage::index))
                                             .store_slice(begin_cell().store_uint("/"u, 8).end_cell().begin_parse())
                                             .store_slice(to_string(my_address().skip_bits(11).preload_uint(256)))
                                         .end_cell();
-
         store_data();
         return ();
     }
 
-    int op = in_msg_body.slice_empty?() ? 0 : in_msg_body~load_uint(32);
+    int op = in_msg_body~load_uint(32);
 
     if (flags & 1) { ;; route all prove_ownership bounced messages to owner
         ;; first op was 0xffffffff, because of bounced, now we need to read real one
@@ -149,9 +150,17 @@ slice to_string(int n) impure {
         return ();
     }
 
-    if (op == op::destroy() | (op == 0 & equal_slices(in_msg_body, "#unlock") & (in_msg_body.slice_refs() == 0))) {
+    if(op == op::excesses()) {
+        return ();
+    }
+
+    ;; Unlock Locked Tokens
+    if (op == op::destroy()) | (op == 0) {
         if(op == op::destroy()) {
             in_msg_body~load_uint(64); ;; skip query_id
+        } else {
+            throw_unless(399, in_msg_body.slice_refs() == 0);
+            throw_unless(400, equal_slices(in_msg_body, "#unlock") | equal_slices(in_msg_body, "u"));
         }
         throw_unless(401, equal_slices(storage::owner_address, sender_address));
 
@@ -178,9 +187,7 @@ slice to_string(int n) impure {
 
         int amount = in_msg_body~load_coins();
 
-        if (~ init?) {
-            
-        } else {
+        if (init?) {
             storage::jetton_balance += amount;
             store_data();
         }
@@ -246,17 +253,17 @@ slice to_string(int n) impure {
         store_data();
         return ();
     }
+    if (op == op::transfer()) {
+        throw(413);
+    }
     if (op == op::take_excess()) {
-        throw_unless(401, equal_slices(storage::owner_address, sender_address));
+        throw_unless(401, equal_slices(storage::collection_address, sender_address));
 
         ;; reserve amount for storage
         raw_reserve(min_tons_for_storage(), 0);
 
         send_msg(flag::regular(), sender_address, 0, op::excesses(), query_id, null(), 128);
         return ();
-    }
-    if (op == op::transfer()) {
-        throw(413);
     }
     if (op == op::contract_upgrade()) { ;; update collection's code & data
         throw_unless(405, equal_slices(storage::collection_address, sender_address));
@@ -271,6 +278,7 @@ slice to_string(int n) impure {
 
         return ();
     }
+
     throw(0xffff);
 }
 
@@ -278,12 +286,15 @@ slice to_string(int n) impure {
 ;;  GET Methods
 ;;
 
-
+int can_unlock() method_id {
+    load_data();
+    return now() > storage::lock_until;
+}
 
 (slice, int, int) get_info() method_id {
-       load_data();
-       (slice jetton_master_address, cell jetton_wallet_code) = unpack_jetton_wallet(storage::jetton_wallet);
-       return (jetton_master_address, storage::jetton_balance, storage::lock_until);
+   load_data();
+   (slice jetton_master_address, cell jetton_wallet_code) = unpack_jetton_wallet(storage::jetton_wallet);
+   return (jetton_master_address, storage::jetton_balance, storage::lock_until);
 }
 
 (int, int, slice, slice, cell) get_nft_data() method_id {

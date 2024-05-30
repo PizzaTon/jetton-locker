@@ -10,7 +10,7 @@ export async function run(provider: NetworkProvider) {
     const lockerCode = await compile('LockerCollection');
     const nftItemCode = await compile('LockBill');
 
-    const lockerCollection = provider.open(LockerCollection.createFromAddress(Address.parse('kQBGuqsj8U6E2iNRPGLI7xsFwD2wGsAv03w2ccEpqAEk21zM')));
+    const lockerCollection = provider.open(LockerCollection.createFromAddress(Address.parse('kQCvlQ6ISTEOIC84w-PbzDViQWwPsxLM17peh0VAF__xCNrS')));
 
     await lockerCollection.sendCodeUpgrade(provider.sender(), {
         newCode: lockerCode,

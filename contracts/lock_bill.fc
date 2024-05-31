@@ -46,7 +46,7 @@ global cell storage::jetton_wallet;
         storage::owner_address     = ps~load_msg_addr();
         storage::content           = ps~load_ref();
         storage::authority_address = ps~load_msg_addr();
-        storage::revoked_at        = ps~load_uint(64); 
+        storage::revoked_at        = ps~load_uint(64);
 
         storage::lock_until        = ds~load_uint(64);
         storage::jetton_balance    = ds~load_coins();

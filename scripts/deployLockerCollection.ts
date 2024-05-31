@@ -23,7 +23,7 @@ export async function run(provider: NetworkProvider) {
         secondOwner: sender,
     }, await compile('LockerCollection')));
 
-    await lockerCollection.sendDeploy(provider.sender(), toNano('0.05'));
+    await lockerCollection.sendDeploy(provider.sender(), toNano('0.01'));
 
     await provider.waitForDeploy(lockerCollection.address);
 

@@ -10,12 +10,12 @@ export async function run(provider: NetworkProvider) {
     const lockerCode = await compile('LockerCollection');
     const nftItemCode = await compile('LockBill');
 
-    const lockerCollection = provider.open(LockerCollection.createFromAddress(Address.parse('kQCvlQ6ISTEOIC84w-PbzDViQWwPsxLM17peh0VAF__xCNrS')));
+    const lockerCollection = provider.open(LockerCollection.createFromAddress(Address.parse('EQD6GjdqIiW9WsuDixqd-3mAOxvNl8EZA7nnOKiIyzQgamUQ')));
 
     await lockerCollection.sendCodeUpgrade(provider.sender(), {
         newCode: lockerCode,
         newData: lockerCollectionConfigToCell({
-            nextItemIndex: 2n,
+            nextItemIndex: 0n,
             collectionContent: 'https://api.pizzaton.me/v1/locker/collectionmeta',
             commonContent: 'https://api.pizzaton.me/v1/locker/meta/',
             nftItemCode: nftItemCode,

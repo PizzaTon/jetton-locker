@@ -98,7 +98,7 @@ slice calculate_nft_item_address(int wc, cell state_init) {
         cell payload = in_msg_body~load_maybe_ref();
         ifnot payload.null?() {
             slice ps = payload.begin_parse();
-            (slice jetton_master_address, cell jetton_wallet_code, int lock_until) = (ps~load_msg_addr(), ps~load_ref(), ps~load_uint(64));
+            (slice jetton_master_address, cell jetton_wallet_code, int lock_until) = (ps~load_msg_addr(), ps~load_ref(), ps~load_uint(32));
 
             cell state_init = calculate_jetton_wallet_state_init(my_address(), jetton_master_address, jetton_wallet_code);
             slice jetton_wallet_address = calculate_jetton_wallet_address(state_init);
@@ -107,7 +107,7 @@ slice calculate_nft_item_address(int wc, cell state_init) {
             builder nft_content = begin_cell()
                 .store_slice(from)
                 .store_slice(my_address())
-                .store_uint(lock_until, 64)
+                .store_uint(lock_until, 32)
                 .store_coins(amount)
                 .store_ref(
                     begin_cell()

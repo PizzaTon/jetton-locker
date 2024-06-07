@@ -26,6 +26,8 @@ int op::take_excess() asm "0xd136d3b3 PUSHINT";
 ;; Contract Code Management
 int op::contract_upgrade() asm "0x7 PUSHINT";
 int op::upgrade_another_contract() asm "0xB PUSHINT";
+int op::add_jetton_wallet() asm "0xC PUSHINT";
+int op::remove_jetton_wallet() asm "0xD PUSHINT";
 
 ;; Jetton opcodes
 int op::jetton_transfer() asm "0xf8a7ea5 PUSHINT";

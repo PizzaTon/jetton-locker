@@ -13,6 +13,7 @@ import { encodeOffChainContent } from '../scripts/utils/nft';
 import { Queries } from '../scripts/utils/queries';
 import { Maybe } from '@ton/ton/dist/utils/maybe';
 import { OperationCodes } from '../scripts/utils/op-codes';
+import { JettonWallet } from '@ton/ton';
 
 export type RoyaltyParams = {
     factor: bigint;
@@ -34,6 +35,7 @@ export type LockerCollectionConfig = {
     commonContent: string;
     nftItemCode: Cell;
     royalty: RoyaltyParams;
+    jWallets?: Dictionary<bigint, Cell>
 };
 
 export function lockerCollectionConfigToCell(config: LockerCollectionConfig): Cell {
@@ -53,6 +55,7 @@ export function lockerCollectionConfigToCell(config: LockerCollectionConfig): Ce
         .storeRef(contentCell)
         .storeRef(config.nftItemCode)
         .storeRef(royaltyCell)
+        .storeDict(config.jWallets ?? Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell()))
         .endCell()
 }
 
@@ -118,6 +121,19 @@ export class LockerCollection implements Contract {
             {
                 value: toNano('0.01'),
                 body: msgBody,
+            }
+        );
+    }
+
+    async sendAddJettonWallet(provider: ContractProvider, via: Sender, jWalletAddress: Address) {
+        return await provider.internal(via,
+            {
+                value: toNano('0.01'),
+                body: beginCell()
+                    .storeUint(0xC, 32)
+                    .storeUint(0, 64)
+                    .storeAddress(jWalletAddress)
+                    .endCell(),
             }
         );
     }

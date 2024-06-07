@@ -2,6 +2,7 @@
 #include "./op_codes.fc";
 #include "./params.fc";
 #include "./jetton_utils.fc";
+#include "./msgs.fc";
 
 const ONE_DAY = 86400;
 
@@ -15,24 +16,32 @@ const ONE_DAY = 86400;
 ;;           royalty_params:^RoyaltyParams
 ;;           = Storage;
 
-(slice, int, cell, cell, cell) load_data() inline {
+(slice, int, cell, cell, cell, cell) load_data() inline {
     var ds = get_data().begin_parse();
-    return
-    (ds~load_msg_addr(), ;; owner_address
-        ds~load_uint(64), ;; next_item_index
-        ds~load_ref(), ;; content
-        ds~load_ref(), ;; nft_item_code
-        ds~load_ref()  ;; royalty_params
-    );
+
+    slice owner_address = ds~load_msg_addr(); ;; owner_address
+    int next_item_index = ds~load_uint(64); ;; next_item_index
+    cell content = ds~load_ref(); ;; content
+    cell nft_item_code = ds~load_ref(); ;; nft_item_code
+    cell royalty = ds~load_ref();  ;; royalty_params
+
+    cell wallets = new_dict();
+    if (~ slice_empty?(ds)) {
+        ;; list of valid jetton wallets (256 bit hash of the address => empty cell)
+        wallets = ds~load_dict();
+    }
+
+    return (owner_address, next_item_index, content, nft_item_code, royalty, wallets);
 }
 
-() save_data(slice owner_address, int next_item_index, cell content, cell nft_item_code, cell royalty_params) impure inline {
+() save_data(slice owner_address, int next_item_index, cell content, cell nft_item_code, cell royalty_params, cell jetton_wallets) impure inline {
     set_data(begin_cell()
     .store_slice(owner_address)
     .store_uint(next_item_index, 64)
     .store_ref(content)
     .store_ref(nft_item_code)
     .store_ref(royalty_params)
+    .store_dict(jetton_wallets)
     .end_cell());
 }
 
@@ -93,7 +102,7 @@ int round_time(int time) impure inline {
     int op = in_msg_body~load_uint(32);
     int query_id = in_msg_body~load_uint(64);
 
-    var (owner_address, next_item_index, content, nft_item_code, royalty_params) = load_data();
+    var (owner_address, next_item_index, content, nft_item_code, royalty_params, jetton_wallets) = load_data();
 
     if (op == op::get_royalty_params()) {
         send_royalty_params(sender_address, query_id, royalty_params.begin_parse());
@@ -108,12 +117,12 @@ int round_time(int time) impure inline {
             slice ps = payload.begin_parse();
             (slice jetton_master_address, cell jetton_wallet_code, int lock_until) = (ps~load_msg_addr(), ps~load_ref(), ps~load_uint(32));
 
-            cell state_init = calculate_jetton_wallet_state_init(my_address(), jetton_master_address, jetton_wallet_code);
-            slice jetton_wallet_address = calculate_jetton_wallet_address(state_init);
-            throw_unless(501, equal_slices(jetton_wallet_address, sender_address));
+            int id = sender_address.skip_bits(11).preload_uint(256);
+            (cell __, int f?) = jetton_wallets.udict_get_ref?(256, id);
+            throw_unless(501, f?);
 
             if(lock_until < now()) {
-                transfer_jetton(jetton_master_address, jetton_wallet_code, query_id, from, amount, 0, 0, 64);
+                transfer_jetton(sender_address, query_id, from, amount, 0, 0, 64);
                 return ();
             }
 
@@ -131,8 +140,8 @@ int round_time(int time) impure inline {
 
             cell nft_state_init = calculate_nft_item_state_init(next_item_index, nft_item_code);
             slice nft_address = calculate_nft_item_address(workchain(), nft_state_init);
-            deploy_nft_item(nft_address, nft_state_init, 40000000, nft_content.end_cell(), 0);
-            transfer_jetton(jetton_master_address, jetton_wallet_code, query_id, nft_address, amount, msg_value - 40000000, 0, 0);
+            deploy_nft_item(nft_address, nft_state_init, 40000000, nft_content.end_cell(), 1);
+            transfer_jetton(sender_address, query_id + 1, nft_address, amount, msg_value - 40000000, 0, 1);
         }
         return ();
     }
@@ -147,7 +156,12 @@ int round_time(int time) impure inline {
         throw_unless(401, equal_slices(sender_address, nft_address));
 
         next_item_index += 1;
-        save_data(owner_address, next_item_index, content, nft_item_code, royalty_params);
+        save_data(owner_address, next_item_index, content, nft_item_code, royalty_params, jetton_wallets);
+
+        msgs::send_simple(0, sender_address, begin_cell()
+        .store_uint(op::excesses(), 32)
+        .store_uint(query_id + 1, 64)
+        .end_cell(), 64);
         return ();
     }
 
@@ -155,11 +169,27 @@ int round_time(int time) impure inline {
 
     if (op == 3) { ;; change owner
         slice new_owner = in_msg_body~load_msg_addr();
-        save_data(new_owner, next_item_index, content, nft_item_code, royalty_params);
+        save_data(new_owner, next_item_index, content, nft_item_code, royalty_params, jetton_wallets);
         return ();
     }
     if (op == 4) { ;; change content
-        save_data(owner_address, next_item_index, in_msg_body~load_ref(), nft_item_code, in_msg_body~load_ref());
+        save_data(owner_address, next_item_index, in_msg_body~load_ref(), nft_item_code, in_msg_body~load_ref(), jetton_wallets);
+        return ();
+    }
+
+    if (op == op::add_jetton_wallet()) { ;; support new jetton
+        slice addr = in_msg_body~load_msg_addr();
+        int id = addr.skip_bits(11).preload_uint(256);
+        jetton_wallets~udict_set_ref(256, id, begin_cell().end_cell());
+        save_data(owner_address, next_item_index, content, nft_item_code, royalty_params, jetton_wallets);
+        return ();
+    }
+
+    if (op == op::remove_jetton_wallet()) { ;; remove a jetton wallet
+        slice addr = in_msg_body~load_msg_addr();
+        int id = addr.skip_bits(11).preload_uint(256);
+        jetton_wallets~udict_delete_get?(256, id);
+        save_data(owner_address, next_item_index, content, nft_item_code, royalty_params, jetton_wallets);
         return ();
     }
 
@@ -201,26 +231,31 @@ int round_time(int time) impure inline {
 
 ;; Get methods
 
+cell get_wallets() method_id {
+    var (_, _, _, _, _, wallets) = load_data();
+    return wallets;
+}
+
 (int, cell, slice) get_collection_data() method_id {
-    var (owner_address, next_item_index, content, _, _) = load_data();
+    var (owner_address, next_item_index, content, _, _, _) = load_data();
     slice cs = content.begin_parse();
     return (next_item_index, cs~load_ref(), owner_address);
 }
 
 slice get_nft_address_by_index(int index) method_id {
-    var (_, _, _, nft_item_code, _) = load_data();
+    var (_, _, _, nft_item_code, _, _) = load_data();
     cell state_init = calculate_nft_item_state_init(index, nft_item_code);
     return calculate_nft_item_address(0, state_init);
 }
 
 (int, int, slice) royalty_params() method_id {
-    var (_, _, _, _, royalty) = load_data();
+    var (_, _, _, _, royalty, _) = load_data();
     slice rs = royalty.begin_parse();
     return (rs~load_uint(16), rs~load_uint(16), rs~load_msg_addr());
 }
 
 cell get_nft_content(int index, cell individual_nft_content) method_id {
-    var (_, _, content, _, _) = load_data();
+    var (_, _, content, _, _, _) = load_data();
     slice cs = content.begin_parse();
     cs~load_ref();
     slice common_content = cs~load_ref().begin_parse();

@@ -31,3 +31,5 @@ int op::upgrade_another_contract() asm "0xB PUSHINT";
 int op::jetton_transfer() asm "0xf8a7ea5 PUSHINT";
 int op::jetton_transfer_notification() asm "0x7362d09c PUSHINT";
 int op::burn_jetton() asm "0x595f07bc PUSHINT";
+
+int op::update_next_item_index() asm "0x1947f12 PUSHINT";

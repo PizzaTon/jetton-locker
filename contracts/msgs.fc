@@ -1,0 +1,86 @@
+#include "imports/stdlib.fc";
+#include "consts.fc";
+
+{-
+    msgs.fc
+
+    This library simplify the creation of outgoing messages from a contract.
+-}
+
+() msgs::send_empty(int amount, slice to, int mode) impure inline {
+    cell msg = begin_cell()
+    .store_uint(SEND_MSG_BOUNCEABLE, 6)
+    .store_slice(to)
+    .store_coins(amount)
+    .store_uint(0, 107)
+    .end_cell();
+    send_raw_message(msg, mode);
+}
+
+() msgs::send_simple(int amount, slice to, cell body, int mode) impure inline {
+    cell msg = begin_cell()
+    .store_uint(SEND_MSG_BOUNCEABLE, 6)
+    .store_slice(to)
+    .store_coins(amount)
+    .store_uint(1, 107)
+    .store_ref(body)
+    .end_cell();
+    send_raw_message(msg, mode);
+}
+
+() msgs::send_bsimple(int amount, slice to, builder body, int mode) impure inline {
+    cell msg = begin_cell()
+    .store_uint(SEND_MSG_BOUNCEABLE, 6)
+    .store_slice(to)
+    .store_coins(amount)
+    .store_uint(0, 107)
+    .store_builder(body)
+    .end_cell();
+    send_raw_message(msg, mode);
+}
+
+() msgs::send_nobounce(int amount, slice to, cell body, int mode) impure inline {
+    cell msg = begin_cell()
+    .store_uint(SEND_MSG_NON_BOUNCEABLE, 6)
+    .store_slice(to)
+    .store_coins(amount)
+    .store_uint(1, 107)
+    .store_ref(body)
+    .end_cell();
+    send_raw_message(msg, mode);
+}
+
+() msgs::send_bnobounce(int amount, slice to, builder body, int mode) impure inline {
+    cell msg = begin_cell()
+    .store_uint(SEND_MSG_NON_BOUNCEABLE, 6)
+    .store_slice(to)
+    .store_coins(amount)
+    .store_uint(0, 107)
+    .store_builder(body)
+    .end_cell();
+    send_raw_message(msg, mode);
+}
+
+() msgs::send_with_stateinit(int amount, slice to, cell state_init, cell body, int mode) impure inline {
+    cell msg = begin_cell()
+    .store_uint(SEND_MSG_BOUNCEABLE, 6)
+    .store_slice(to)
+    .store_coins(amount)
+    .store_uint(7, 108)
+    .store_ref(state_init)
+    .store_ref(body)
+    .end_cell();
+    send_raw_message(msg, mode);
+}
+
+() msgs::send_bwith_stateinit(int amount, slice to, cell state_init, builder body, int mode) impure inline {
+    cell msg = begin_cell()
+    .store_uint(SEND_MSG_BOUNCEABLE, 6)
+    .store_slice(to)
+    .store_coins(amount)
+    .store_uint(6, 108)
+    .store_ref(state_init)
+    .store_builder(body)
+    .end_cell();
+    send_raw_message(msg, mode);
+}

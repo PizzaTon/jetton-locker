@@ -2,6 +2,7 @@
 #include "./op_codes.fc";
 #include "./params.fc";
 #include "./jetton_utils.fc";
+#include "./msgs.fc";
 
 ;;
 ;;  TON SBT Item Smart Contract
@@ -24,7 +25,6 @@ global int storage::index;
 global int init?;
 global slice storage::collection_address;
 global slice storage::owner_address;
-global slice storage::prev_owner;
 global slice storage::authority_address;
 global cell storage::content;
 global int storage::revoked_at;
@@ -52,8 +52,6 @@ global cell storage::jetton_wallet;
         storage::lock_until        = ds~load_uint(32);
         storage::jetton_balance    = ds~load_coins();
         storage::jetton_wallet     = ds~load_ref();
-
-        storage::prev_owner     = ps~load_msg_addr();
     }
 }
 
@@ -73,8 +71,6 @@ global cell storage::jetton_wallet;
         .store_uint(storage::lock_until, 32)
         .store_coins(storage::jetton_balance)
         .store_ref(storage::jetton_wallet)
-
-        .store_slice(storage::prev_owner)
         .end_cell()
     );
 }
@@ -125,9 +121,6 @@ slice to_string(int n) impure {
         throw_unless(405, equal_slices(storage::collection_address, sender_address));
 
         storage::owner_address     = in_msg_body~load_msg_addr();
-
-        storage::prev_owner     = storage::owner_address;
-
         storage::authority_address = in_msg_body~load_msg_addr();
         storage::revoked_at        = 0;
         storage::lock_until        = in_msg_body~load_uint(32);
@@ -140,6 +133,13 @@ slice to_string(int n) impure {
                                             .store_slice(begin_cell().store_uint("/"u, 8).end_cell().begin_parse())
                                             .store_slice(to_string(my_address().skip_bits(11).preload_uint(256)))
                                         .end_cell();
+
+        msgs::send_simple(0, storage::collection_address, begin_cell()
+            .store_uint(op::update_next_item_index(), 32)
+            .store_uint(100, 64)
+            .store_uint(storage::index, 64)
+        .end_cell(), 64);
+
         store_data();
         return ();
     }

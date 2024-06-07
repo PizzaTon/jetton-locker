@@ -112,6 +112,11 @@ int round_time(int time) impure inline {
             slice jetton_wallet_address = calculate_jetton_wallet_address(state_init);
             throw_unless(501, equal_slices(jetton_wallet_address, sender_address));
 
+            if(lock_until < now()) {
+                transfer_jetton(jetton_master_address, jetton_wallet_code, query_id, from, amount, 0, 0, 64);
+                return ();
+            }
+
             builder nft_content = begin_cell()
                 .store_slice(from)
                 .store_slice(my_address())
@@ -126,16 +131,23 @@ int round_time(int time) impure inline {
 
             cell nft_state_init = calculate_nft_item_state_init(next_item_index, nft_item_code);
             slice nft_address = calculate_nft_item_address(workchain(), nft_state_init);
-            deploy_nft_item(nft_address, nft_state_init, 40000000, nft_content.end_cell(), 1);
-            transfer_jetton(jetton_master_address, jetton_wallet_code, query_id, nft_address, amount, msg_value - 40000000, 0, 1);
-
-            next_item_index += 1;
-            save_data(owner_address, next_item_index, content, nft_item_code, royalty_params);
+            deploy_nft_item(nft_address, nft_state_init, 40000000, nft_content.end_cell(), 0);
+            transfer_jetton(jetton_master_address, jetton_wallet_code, query_id, nft_address, amount, msg_value - 40000000, 0, 0);
         }
         return ();
     }
 
     if(op == op::excesses()) {
+        return ();
+    }
+
+    if(op == op::update_next_item_index()) {
+        cell nft_state_init = calculate_nft_item_state_init(in_msg_body~load_uint(64), nft_item_code);
+        slice nft_address = calculate_nft_item_address(workchain(), nft_state_init);
+        throw_unless(401, equal_slices(sender_address, nft_address));
+
+        next_item_index += 1;
+        save_data(owner_address, next_item_index, content, nft_item_code, royalty_params);
         return ();
     }
 

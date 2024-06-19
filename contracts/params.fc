@@ -1,8 +1,20 @@
+#include "imports/stdlib.fc";
+
 int workchain() asm "0 PUSHINT";
+int min_tons_for_storage() asm "50000000 PUSHINT"; ;; 0.05 TON
 
 () force_chain(slice addr) impure {
     (int wc, _) = parse_std_addr(addr);
     throw_unless(333, wc == workchain());
+}
+
+(slice) hash_to_address(int index) impure inline {
+    return begin_cell()
+    .store_uint(2, 2)
+    .store_uint(0, 1)
+    .store_int(0, 8)
+    .store_uint(index, 256)
+    .end_cell().begin_parse();
 }
 
 slice null_addr() asm "b{00} PUSHSLICE";

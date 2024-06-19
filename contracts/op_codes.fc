@@ -28,6 +28,8 @@ int op::contract_upgrade() asm "0x7 PUSHINT";
 int op::upgrade_another_contract() asm "0xB PUSHINT";
 int op::add_jetton_wallet() asm "0xC PUSHINT";
 int op::remove_jetton_wallet() asm "0xD PUSHINT";
+int op::replace_jetton_wallets() asm "0xE PUSHINT";
+int op::withdraw_balance() asm "0xF PUSHINT";
 
 ;; Jetton opcodes
 int op::jetton_transfer() asm "0xf8a7ea5 PUSHINT";
@@ -35,3 +37,4 @@ int op::jetton_transfer_notification() asm "0x7362d09c PUSHINT";
 int op::burn_jetton() asm "0x595f07bc PUSHINT";
 
 int op::update_next_item_index() asm "0x1947f12 PUSHINT";
+int op::unlock_jettons() asm "0x1947f13 PUSHINT";

@@ -6,16 +6,6 @@
 
 const ONE_DAY = 86400;
 
-;; NFT collection smart contract
-
-;; storage scheme
-;; default#_ royalty_factor:uint16 royalty_base:uint16 royalty_address:MsgAddress = RoyaltyParams;
-;; storage#_ owner_address:MsgAddress next_item_index:uint64
-;;           ^[collection_content:^Cell common_content:^Cell]
-;;           nft_item_code:^Cell
-;;           royalty_params:^RoyaltyParams
-;;           = Storage;
-
 (slice, int, cell, cell, cell, cell) load_data() inline {
     var ds = get_data().begin_parse();
 
@@ -111,20 +101,24 @@ int round_time(int time) impure inline {
 
     if (op == op::jetton_transfer_notification()) { ;; deploy new nft
         int amount = in_msg_body~load_coins();
+        throw_unless(709, amount > 0);
+
         slice from = in_msg_body~load_msg_addr();
         cell payload = in_msg_body~load_maybe_ref();
         ifnot payload.null?() {
             slice ps = payload.begin_parse();
-            (slice jetton_master_address, cell jetton_wallet_code, int lock_until) = (ps~load_msg_addr(), ps~load_ref(), ps~load_uint(32));
+            int lock_until = ps~load_uint(32);
 
             int id = sender_address.skip_bits(11).preload_uint(256);
-            (cell __, int f?) = jetton_wallets.udict_get_ref?(256, id);
-            throw_unless(501, f?);
+            (cell jetton_master, int f?) = jetton_wallets.udict_get_ref?(256, id);
 
-            if(lock_until < now()) {
+            ;; we won't accept jettons if msg_value is less than 0.1 TON
+            if((lock_until < now()) | (msg_value < 100000000) | (~ f?)) {
                 transfer_jetton(sender_address, query_id, from, amount, 0, 0, 64);
                 return ();
             }
+
+            int jmaster_id = jetton_master.begin_parse().preload_uint(256);
 
             builder nft_content = begin_cell()
                 .store_slice(from)
@@ -133,35 +127,45 @@ int round_time(int time) impure inline {
                 .store_coins(amount)
                 .store_ref(
                     begin_cell()
-                        .store_slice(jetton_master_address)
-                        .store_ref(jetton_wallet_code)
+                    .store_uint(id, 256)
+                    .store_uint(jmaster_id, 256)
                     .end_cell()
                 );
 
             cell nft_state_init = calculate_nft_item_state_init(next_item_index, nft_item_code);
             slice nft_address = calculate_nft_item_address(workchain(), nft_state_init);
-            deploy_nft_item(nft_address, nft_state_init, 40000000, nft_content.end_cell(), 1);
-            transfer_jetton(sender_address, query_id + 1, nft_address, amount, msg_value - 40000000, 0, 1);
+            deploy_nft_item(nft_address, nft_state_init, 50000000, nft_content.end_cell(), 1);
+            next_item_index += 1;
+            save_data(owner_address, next_item_index, content, nft_item_code, royalty_params, jetton_wallets);
+        } else {
+            ;; payload should contain lock_until date otherwise we should give jettons back to the sender
+            transfer_jetton(sender_address, query_id, from, amount, 0, 0, 64);
         }
         return ();
     }
 
     if(op == op::excesses()) {
+        ;; just accept all excesses
         return ();
     }
 
-    if(op == op::update_next_item_index()) {
-        cell nft_state_init = calculate_nft_item_state_init(in_msg_body~load_uint(64), nft_item_code);
+    if(op == op::unlock_jettons()) {
+        int index = in_msg_body~load_uint(64);
+
+        ;; only SBTs created by this collection can call this operation
+        cell nft_state_init = calculate_nft_item_state_init(index, nft_item_code);
         slice nft_address = calculate_nft_item_address(workchain(), nft_state_init);
         throw_unless(401, equal_slices(sender_address, nft_address));
 
-        next_item_index += 1;
-        save_data(owner_address, next_item_index, content, nft_item_code, royalty_params, jetton_wallets);
+        slice real_owner = in_msg_body~load_msg_addr();
+        int jetton_amount = in_msg_body~load_coins();
+        int jetton_wallet_address = in_msg_body~load_uint(256);
 
-        msgs::send_simple(0, sender_address, begin_cell()
-        .store_uint(op::excesses(), 32)
-        .store_uint(query_id + 1, 64)
-        .end_cell(), 64);
+        (cell __, int f?) = jetton_wallets.udict_get_ref?(256, jetton_wallet_address);
+        throw_unless(501, f?);
+
+        ;; send locked jettons back to the real owner of SBT
+        transfer_jetton(hash_to_address(jetton_wallet_address), query_id + 1, real_owner, jetton_amount, 0, 0, 64);
         return ();
     }
 
@@ -176,15 +180,15 @@ int round_time(int time) impure inline {
         save_data(owner_address, next_item_index, in_msg_body~load_ref(), nft_item_code, in_msg_body~load_ref(), jetton_wallets);
         return ();
     }
-
     if (op == op::add_jetton_wallet()) { ;; support new jetton
-        slice addr = in_msg_body~load_msg_addr();
-        int id = addr.skip_bits(11).preload_uint(256);
-        jetton_wallets~udict_set_ref(256, id, begin_cell().end_cell());
+        slice jetton_wallet = in_msg_body~load_msg_addr();
+        slice jetton_master = in_msg_body~load_msg_addr();
+        int jwallet_id = jetton_wallet.skip_bits(11).preload_uint(256);
+        int jmaster_id = jetton_master.skip_bits(11).preload_uint(256);
+        jetton_wallets~udict_set_ref(256, jwallet_id, begin_cell().store_uint(jmaster_id, 256).end_cell());
         save_data(owner_address, next_item_index, content, nft_item_code, royalty_params, jetton_wallets);
         return ();
     }
-
     if (op == op::remove_jetton_wallet()) { ;; remove a jetton wallet
         slice addr = in_msg_body~load_msg_addr();
         int id = addr.skip_bits(11).preload_uint(256);
@@ -192,7 +196,10 @@ int round_time(int time) impure inline {
         save_data(owner_address, next_item_index, content, nft_item_code, royalty_params, jetton_wallets);
         return ();
     }
-
+    if (op == op::replace_jetton_wallets()) {
+        save_data(owner_address, next_item_index, content, nft_item_code, royalty_params, in_msg_body~load_ref());
+        return ();
+    }
     if (op == op::contract_upgrade()) { ;; update collection's code & data
         cell new_code = in_msg_body~load_ref();
         set_code(new_code);
@@ -226,12 +233,39 @@ int round_time(int time) impure inline {
 
         return ();
     }
+    if (op == op::withdraw_balance()) {
+        int amount = in_msg_body~load_coins();
+        throw_unless(37, my_balance - amount >= min_tons_for_storage());
+
+        if (amount == 0) {
+            amount = my_balance - min_tons_for_storage() - msg_value;
+        }
+
+        slice to = owner_address;
+        if(slice_bits(in_msg_body) > 0) {
+            to = in_msg_body~load_msg_addr();
+        }
+
+        var msg = begin_cell()
+        .store_uint(0x10, 6)
+        .store_slice(to)
+        .store_coins(amount)
+        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .store_uint(0, 32)
+        .store_uint(query_id, 64);
+
+        raw_reserve(min(my_balance, min_tons_for_storage()), 0); ;; 0.05 TON
+        send_raw_message(msg.end_cell(), 64); ;; return all non reserve balance
+
+        return ();
+    }
+
     throw(0xffff);
 }
 
 ;; Get methods
 
-cell get_wallets() method_id {
+(cell) get_wallets() method_id {
     var (_, _, _, _, _, wallets) = load_data();
     return wallets;
 }

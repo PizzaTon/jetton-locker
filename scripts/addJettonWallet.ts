@@ -1,4 +1,4 @@
-import { Address, beginCell, Cell, Dictionary, toNano } from '@ton/core';
+import { Address, beginCell, Cell, Dictionary, internal, toNano } from '@ton/core';
 import { LockerCollection, lockerCollectionConfigToCell } from '../wrappers/LockerCollection';
 import { compile, NetworkProvider } from '@ton/blueprint';
 import { encodeOffChainContent } from './utils/nft';
@@ -10,7 +10,10 @@ export async function run(provider: NetworkProvider) {
     const lockerCode = await compile('LockerCollection');
     const nftItemCode = await compile('LockBill');
 
-    const lockerCollection = provider.open(LockerCollection.createFromAddress(Address.parse('kQAVvcLuoeRVtlXIXxes6e8a5HRwuoz0HH4dkN-r66AgrDE_')));
+    const lockerCollection = provider.open(LockerCollection.createFromAddress(Address.parse('EQDVWnrDtDO9Td-K8qEgHwSo82HneZF_oAPkKaMawRhAILKR')));
 
-    await lockerCollection.sendAddJettonWallet(provider.sender(), Address.parse('0:628f5bbcc9e4d39b2a5e4799da9554276a5f48bb0d9ce5f2b4ab662f058e4759'))
+    await lockerCollection.sendAddJettonWallet(provider.sender(), {
+        jWalletAddress: Address.parse('0:0821e9e1f6303b48dd5ed6846196be528912ea11c483d3846f90b3d3e4c98068'),
+        jMasterAddress: Address.parse('kQAGs82fyuPTvolTdKHWfutaoi7NGN71C4TvoHJ0D48Pwrip')
+    })
 }

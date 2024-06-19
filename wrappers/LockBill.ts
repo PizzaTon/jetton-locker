@@ -1,4 +1,14 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
+import {
+    Address,
+    beginCell,
+    Cell,
+    comment,
+    Contract,
+    contractAddress,
+    ContractProvider,
+    Sender,
+    SendMode
+} from '@ton/core';
 
 export type LockBillConfig = {};
 
@@ -24,6 +34,14 @@ export class LockBill implements Contract {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell().endCell(),
+        });
+    }
+
+    async sendUnlock(provider: ContractProvider, via: Sender, value: bigint) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: comment('#unlock'),
         });
     }
 }

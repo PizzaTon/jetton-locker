@@ -14,6 +14,8 @@ import { Queries } from '../scripts/utils/queries';
 import { Maybe } from '@ton/ton/dist/utils/maybe';
 import { OperationCodes } from '../scripts/utils/op-codes';
 import { JettonWallet } from '@ton/ton';
+import { jettonsDictionaryValue } from '../scripts/utils/helper';
+import { randomAddress } from '@ton/test-utils';
 
 export type RoyaltyParams = {
     factor: bigint;
@@ -29,13 +31,12 @@ export type CollectionData = {
 
 export type LockerCollectionConfig = {
     owner: Address;
-    secondOwner: Address;
     nextItemIndex: bigint;
     collectionContent: string;
     commonContent: string;
     nftItemCode: Cell;
     royalty: RoyaltyParams;
-    jWallets?: Dictionary<bigint, Cell>
+    jWallets?: Dictionary<bigint, Address> // jetton_wallet => jetton_master
 };
 
 export function lockerCollectionConfigToCell(config: LockerCollectionConfig): Cell {
@@ -55,7 +56,7 @@ export function lockerCollectionConfigToCell(config: LockerCollectionConfig): Ce
         .storeRef(contentCell)
         .storeRef(config.nftItemCode)
         .storeRef(royaltyCell)
-        .storeDict(config.jWallets ?? Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell()))
+        .storeDict(config.jWallets ?? Dictionary.empty(Dictionary.Keys.BigUint(256), jettonsDictionaryValue))
         .endCell()
 }
 
@@ -125,14 +126,18 @@ export class LockerCollection implements Contract {
         );
     }
 
-    async sendAddJettonWallet(provider: ContractProvider, via: Sender, jWalletAddress: Address) {
+    async sendAddJettonWallet(provider: ContractProvider, via: Sender, params: {
+        jWalletAddress: Address,
+        jMasterAddress: Address
+    }) {
         return await provider.internal(via,
             {
                 value: toNano('0.01'),
                 body: beginCell()
                     .storeUint(0xC, 32)
                     .storeUint(0, 64)
-                    .storeAddress(jWalletAddress)
+                    .storeAddress(params.jWalletAddress)
+                    .storeAddress(params.jMasterAddress)
                     .endCell(),
             }
         );
@@ -163,5 +168,22 @@ export class LockerCollection implements Contract {
             bounce: false,
             body: msgBody,
         });
+    }
+
+    async sendWithdrawBalance(provider: ContractProvider, via: Sender) {
+        return await provider.internal(via, {
+            value: toNano(0.01),
+            body: beginCell()
+                .storeUint(0xF,32)
+                .storeUint(0, 64)
+                .storeCoins(toNano(0.1))
+                // .storeAddress(randomAddress()) optional
+                .endCell(),
+        });
+    }
+
+    async getWallets(provider: ContractProvider) {
+        const res = await provider.get('get_wallets', []);
+        return Dictionary.loadDirect(Dictionary.Keys.BigUint(256), jettonsDictionaryValue, res.stack.readCellOpt());
     }
 }
